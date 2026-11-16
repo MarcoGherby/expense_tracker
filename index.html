@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f766e">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Expense Tracker</title>
+<style>
+:root {
+  --bg: #f1f4f2; --card: #ffffff; --text: #1d2b2a; --muted: #62736f;
+  --primary: #0f766e; --income: #15803d; --expense: #b4442c; --border: #dbe3df;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101816; --card: #19241f; --text: #e8f0ec; --muted: #93a8a1;
+    --primary: #2dd4bf; --income: #4ade80; --expense: #f08a74; --border: #2b3a35;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+main { max-width: 720px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+h1 { font-size: 1.4rem; margin: 0; }
+h2 { font-size: 1.05rem; margin: 0 0 10px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.grid3 small { color: var(--muted); display: block; }
+.grid3 strong { font-size: 1.05rem; }
+.income { color: var(--income); } .expense { color: var(--expense); }
+label { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); }
+input, select, button {
+  font: inherit; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); min-height: 44px; width: 100%;
+}
+button { cursor: pointer; background: var(--primary); color: #fff; border: 0; font-weight: 600; }
+button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+button.small { width: auto; min-height: 36px; padding: 6px 12px; font-size: .85rem; }
+:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+form { display: grid; gap: 10px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+.bar > span { display: block; height: 100%; background: var(--primary); }
+.bar.over > span { background: var(--expense); }
+.cat { margin-bottom: 10px; }
+.cat div { display: flex; justify-content: space-between; }
+ul { list-style: none; margin: 0; padding: 0; }
+li.tx { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+li.tx:first-child { border-top: 0; }
+li.tx .meta { color: var(--muted); font-size: .82rem; }
+li.tx .actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+.empty { color: var(--muted); margin: 0; }
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+  background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px;
+  display: none; max-width: 90%;
+}
+.toast.show { display: block; }
+.view { display: grid; gap: 14px; }
+.view[hidden] { display: none; }
+[hidden] { display: none !important; }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tabs button { padding: 8px 2px; font-size: .85rem; }
+.preview { background: var(--bg); border: 1px dashed var(--border); border-radius: 8px; padding: 10px; font-size: .9rem; }
+.tabs button { background: transparent; color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+.tabs button[aria-selected="true"] { background: var(--primary); color: var(--bg); border-color: var(--primary); }
+h3 { font-size: .95rem; margin: 12px 0 6px; }
+.monthRow { background: transparent; color: var(--text); border: 0; border-top: 1px solid var(--border);
+  border-radius: 0; text-align: left; font-weight: 400; padding: 8px 0; min-height: 0; display: grid; gap: 4px; }
+.monthRow:first-child { border-top: 0; }
+.monthRow .head, .monthRow .vals { display: flex; justify-content: space-between; gap: 8px; }
+.monthRow .head strong { text-transform: capitalize; }
+.monthRow .vals, .meta { color: var(--muted); font-size: .82rem; }
+.monthRow .bar { margin-top: 0; height: 6px; }
+.catItem { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 6px 0; border-top: 1px solid var(--border); }
+.catItem:first-child { border-top: 0; }
+.catActions { display: flex; gap: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Expense Tracker</h1>
+  <nav class="tabs" role="tablist" aria-label="Sezioni">
+    <button type="button" role="tab" data-tab="month" aria-selected="true">Mese</button>
+    <button type="button" role="tab" data-tab="year" aria-selected="false">Anno</button>
+    <button type="button" role="tab" data-tab="plans" aria-selected="false">Piani</button>
+    <button type="button" role="tab" data-tab="settings" aria-selected="false">Impostazioni</button>
+  </nav>
+
+  <div id="monthView" class="view">
+  <label>Mese
+    <input type="month" id="monthInput">
+  </label>
+
+  <section class="card">
+    <div class="grid3">
+      <div><small>Entrate</small><strong class="income" id="sumIncome"></strong></div>
+      <div><small>Uscite</small><strong class="expense" id="sumExpenses"></strong></div>
+      <div><small>Saldo</small><strong id="sumBalance"></strong></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Budget mensile</h2>
+    <div class="top"><span id="budgetText"></span><span id="remainingText"></span></div>
+    <div class="bar" id="budgetBar"><span></span></div>
+    <form id="budgetForm" style="margin-top:12px">
+      <input type="text" inputmode="decimal" id="budgetInput" aria-label="Importo budget mensile">
+      <div class="row2">
+        <button type="submit">Per tutti i mesi</button>
+        <button type="button" class="secondary" id="budgetMonthBtn">Solo questo mese</button>
+      </div>
+      <button type="button" class="secondary small" id="budgetResetBtn" hidden>Torna al budget standard</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2 id="formTitle">Nuova transazione</h2>
+    <form id="txForm">
+      <div class="row2">
+        <button type="button" class="secondary" id="scanBtn">Scatta scontrino</button>
+        <button type="button" class="secondary" id="galleryBtn">Scegli foto</button>
+      </div>
+      <input type="file" id="scanCamera" accept="image/*" capture="environment" hidden>
+      <input type="file" id="scanGallery" accept="image/*" hidden>
+      <p class="empty" id="scanStatus" role="status" hidden></p>
+      <details id="scanDetails" hidden>
+        <summary>Testo letto dallo scontrino</summary>
+        <pre id="scanText" style="white-space:pre-wrap;font-size:.8rem"></pre>
+      </details>
+      <div class="row2">
+        <label>Tipo
+          <select id="kindInput">
+            <option value="Uscita">Uscita</option>
+            <option value="Entrata">Entrata</option>
+          </select>
+        </label>
+        <label>Categoria
+          <select id="categoryInput"></select>
+        </label>
+      </div>
+      <label>Descrizione
+        <input type="text" id="descriptionInput" required maxlength="100">
+      </label>
+      <div class="row2">
+        <label>Importo
+          <input type="text" inputmode="decimal" id="amountInput" required placeholder="0,00">
+        </label>
+        <label>Data
+          <input type="date" id="dateInput" required>
+        </label>
+      </div>
+      <button type="submit" id="submitBtn">Aggiungi transazione</button>
+      <button type="button" class="secondary" id="cancelEditBtn" hidden>Annulla modifica</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Uscite per categoria</h2>
+    <div id="categoryList"></div>
+  </section>
+
+  <section class="card">
+    <h2>Transazioni del mese</h2>
+    <ul id="txList"></ul>
+  </section>
+
+  </div>
+
+  <div id="yearView" class="view" hidden>
+    <div class="top">
+      <button class="secondary small" id="yearPrev" type="button" aria-label="Anno precedente">◀</button>
+      <h2 id="yearTitle" style="margin:0"></h2>
+      <button class="secondary small" id="yearNext" type="button" aria-label="Anno successivo">▶</button>
+    </div>
+    <section class="card">
+      <div class="grid3">
+        <div><small>Entrate</small><strong class="income" id="yIncome"></strong></div>
+        <div><small>Uscite</small><strong class="expense" id="yExpenses"></strong></div>
+        <div><small>Saldo</small><strong id="yBalance"></strong></div>
+      </div>
+      <p class="meta" id="yAverage" style="text-align:center;margin:10px 0 0"></p>
+    </section>
+    <section class="card">
+      <h2>Budget annuale</h2>
+      <div class="top"><span id="yBudgetText"></span><span id="yRemainingText"></span></div>
+      <div class="bar" id="yBudgetBar"><span></span></div>
+      <p class="meta" id="yBudgetHint"></p>
+      <form id="annualBudgetForm">
+        <input type="text" inputmode="decimal" id="annualBudgetInput" aria-label="Importo budget annuale">
+        <button type="submit">Imposta budget annuale</button>
+        <button type="button" class="secondary small" id="annualResetBtn" hidden>Usa la somma dei budget mensili</button>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Mese per mese</h2>
+      <p class="meta" style="margin:0 0 6px">Verde = entrate, rosso = uscite. Tocca un mese per aprirlo.</p>
+      <div id="yMonths"></div>
+    </section>
+    <section class="card">
+      <h2>Uscite per categoria</h2>
+      <div id="yCategories"></div>
+    </section>
+  </div>
+
+  <div id="plansView" class="view" hidden>
+    <section class="card">
+      <h2>Nuovo pagamento a rate o abbonamento</h2>
+      <form id="planForm">
+        <label>Tipo
+          <select id="planType">
+            <option value="installments">Pagamento a rate</option>
+            <option value="subscription">Abbonamento (es. Netflix)</option>
+          </select>
+        </label>
+        <label>Descrizione
+          <input type="text" id="planDescription" required maxlength="100">
+        </label>
+        <label>Categoria
+          <select id="planCategory"></select>
+        </label>
+        <label id="planModeWrap">Cosa inserisci
+          <select id="planAmountMode">
+            <option value="total">Totale da rateizzare</option>
+            <option value="installment">Importo di ogni rata</option>
+          </select>
+        </label>
+        <label><span id="planAmountLabel">Importo</span>
+          <input type="text" inputmode="decimal" id="planAmount" required placeholder="0,00">
+        </label>
+        <label id="planCountWrap">Numero di rate
+          <input type="number" id="planCount" min="1" max="360" step="1" value="12">
+        </label>
+        <div class="row2">
+          <label>Una rata ogni
+            <input type="number" id="planInterval" min="1" max="60" step="1" value="1">
+          </label>
+          <label>Unità
+            <select id="planUnit">
+              <option value="weeks">settimane</option>
+              <option value="months" selected>mesi</option>
+              <option value="years">anni</option>
+            </select>
+          </label>
+        </div>
+        <label id="planTanWrap">Tasso d'interesse annuo, TAN % (facoltativo)
+          <input type="text" inputmode="decimal" id="planTan" placeholder="0">
+        </label>
+        <label><span id="planStartLabel">Data della prima rata</span>
+          <input type="date" id="planStart" required>
+        </label>
+        <p class="meta" style="margin:0">Se la data è nel passato, vengono inseriti anche i pagamenti già scaduti.</p>
+        <div class="preview" id="planPreview" hidden></div>
+        <button type="submit">Crea piano</button>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Piani attivi</h2>
+      <ul id="planList"></ul>
+    </section>
+  </div>
+
+  <div id="settingsView" class="view" hidden>
+    <section class="card">
+      <h2>Categorie</h2>
+      <p class="meta" style="margin:0">"Altro" è fissa. Se elimini una categoria, le sue transazioni passano ad "Altro".</p>
+      <h3>Uscite</h3>
+      <ul id="catListUscita"></ul>
+      <form id="catFormUscita"><div class="row2">
+        <input type="text" id="catInputUscita" maxlength="30" placeholder="Nuova categoria" aria-label="Nuova categoria di uscita">
+        <button type="submit">Aggiungi</button>
+      </div></form>
+      <h3>Entrate</h3>
+      <ul id="catListEntrata"></ul>
+      <form id="catFormEntrata"><div class="row2">
+        <input type="text" id="catInputEntrata" maxlength="30" placeholder="Nuova categoria" aria-label="Nuova categoria di entrata">
+        <button type="submit">Aggiungi</button>
+      </div></form>
+    </section>
+  <section class="card">
+    <h2>Backup</h2>
+    <p class="empty" style="margin-bottom:10px">I dati sono salvati solo su questo telefono. Esporta un backup ogni tanto.</p>
+    <div class="row2">
+      <button class="secondary" id="exportBtn" type="button">Esporta backup</button>
+      <button class="secondary" id="importBtn" type="button">Importa backup</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+  </section>
+  </div>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="receipt.js"></script>
+<script src="plans.js"></script>
+<script>
+"use strict";
+
+const KEY_TRANSACTIONS = "expense_tracker_transactions";
+const KEY_BUDGET = "expense_tracker_budget";
+
+const KEY_CATEGORIES = "expense_tracker_categories";
+const KEY_PLANS = "expense_tracker_plans";
+const KEY_MONTH_BUDGETS = "expense_tracker_month_budgets";
+const KEY_ANNUAL_BUDGET = "expense_tracker_annual_budget";
+
+// Values stay in Italian so old data (kind = Entrata/Uscita) imports unchanged.
+const DEFAULT_CATEGORIES = {
+  "Entrata": ["Stipendio", "Lavoro extra", "Regali", "Rimborsi", "Altro"],
+  "Uscita": ["Casa", "Alimentari", "Trasporti", "Ristoranti", "Svago",
+             "Salute", "Abbigliamento", "Abbonamenti", "Viaggi", "Altro"],
+};
+
+// "Altro" is the fallback category: it always exists and is always last.
+function sanitizeCategories(raw) {
+  const result = {};
+  for (const kind of ["Entrata", "Uscita"]) {
+    const list = raw && Array.isArray(raw[kind])
+      ? raw[kind].map((n) => String(n).trim()).filter(Boolean)
+      : DEFAULT_CATEGORIES[kind].slice();
+    result[kind] = [...new Set(list)].filter((n) => n !== "Altro").concat("Altro");
+  }
+  return result;
+}
+
+const $ = (id) => document.getElementById(id);
+const money = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" });
+
+function readStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : JSON.parse(raw);
+  } catch (err) {
+    return fallback;
+  }
+}
+
+function writeStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (err) {
+    showToast("Impossibile salvare i dati su questo dispositivo.");
+  }
+}
+
+function todayISO() {
+  const now = new Date();
+  return new Date(now - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function newId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function parseAmount(raw) {
+  const value = Number(String(raw).trim().replace(",", "."));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function isValidDate(text) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(Date.parse(text));
+}
+
+let categories = sanitizeCategories(readStorage(KEY_CATEGORIES, null));
+let transactions = readStorage(KEY_TRANSACTIONS, []);
+let monthBudgets = readStorage(KEY_MONTH_BUDGETS, {});
+let plans = sanitizePlans(readStorage(KEY_PLANS, []));
+let annualBudget = toBudgetOrNull(readStorage(KEY_ANNUAL_BUDGET, null));
+let budget = Number(readStorage(KEY_BUDGET, 1000));
+let currentMonth = todayISO().slice(0, 7);
+let currentYear = Number(currentMonth.slice(0, 4));
+let editingId = null;
+let toastTimer = null;
+
+function showToast(message) {
+  const toast = $("toast");
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 2500);
+}
+
+function saveTransactions() {
+  writeStorage(KEY_TRANSACTIONS, transactions);
+}
+
+function fillCategories(kind, selected) {
+  const select = $("categoryInput");
+  select.innerHTML = categories[kind]
+    .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+  if (selected && categories[kind].includes(selected)) select.value = selected;
+}
+
+function monthTransactions() {
+  return transactions
+    .filter((t) => t.transaction_date.slice(0, 7) === currentMonth)
+    .sort((a, b) => b.transaction_date.localeCompare(a.transaction_date));
+}
+
+function renderMonth() {
+  const items = monthTransactions();
+  const income = items.filter((t) => t.kind === "Entrata").reduce((s, t) => s + t.amount, 0);
+  const expenses = items.filter((t) => t.kind === "Uscita").reduce((s, t) => s + t.amount, 0);
+  const balance = income - expenses;
+  const monthBudget = budgetFor(currentMonth);
+  const hasCustomBudget = Object.prototype.hasOwnProperty.call(monthBudgets, currentMonth);
+  const remaining = monthBudget - expenses;
+
+  $("monthInput").value = currentMonth;
+  $("sumIncome").textContent = money.format(income);
+  $("sumExpenses").textContent = money.format(expenses);
+  $("sumBalance").textContent = money.format(balance);
+  $("sumBalance").className = balance >= 0 ? "income" : "expense";
+
+  $("budgetText").textContent = `Budget: ${money.format(monthBudget)}${hasCustomBudget ? " (solo questo mese)" : ""}`;
+  $("budgetResetBtn").hidden = !hasCustomBudget;
+  $("remainingText").textContent = remaining >= 0
+    ? `Restano ${money.format(remaining)}`
+    : `Sforato di ${money.format(-remaining)}`;
+  $("remainingText").className = remaining >= 0 ? "income" : "expense";
+  const percent = monthBudget > 0 ? Math.min(100, (expenses / monthBudget) * 100) : (expenses > 0 ? 100 : 0);
+  $("budgetBar").className = "bar" + (remaining < 0 ? " over" : "");
+  $("budgetBar").firstElementChild.style.width = percent + "%";
+  if (document.activeElement !== $("budgetInput")) {
+    $("budgetInput").value = String(monthBudget).replace(".", ",");
+  }
+
+  // Expenses grouped by category, largest first
+  const totals = {};
+  items.filter((t) => t.kind === "Uscita").forEach((t) => {
+    totals[t.category] = (totals[t.category] || 0) + t.amount;
+  });
+  const rows = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  $("categoryList").innerHTML = rows.length
+    ? rows.map(([name, total]) => `
+        <div class="cat">
+          <div><span>${escapeHtml(name)}</span><strong>${money.format(total)}</strong></div>
+          <div class="bar"><span style="width:${(total / expenses) * 100}%"></span></div>
+        </div>`).join("")
+    : '<p class="empty">Nessuna uscita in questo mese.</p>';
+
+  $("txList").innerHTML = items.length
+    ? items.map((t) => `
+        <li class="tx">
+          <div>
+            <div>${escapeHtml(t.description)}${planLabel(t)}</div>
+            <div class="meta">${t.transaction_date} · ${escapeHtml(t.category)}${t.transaction_date > todayISO() ? " · in programma" : ""}</div>
+          </div>
+          <strong class="${t.kind === "Entrata" ? "income" : "expense"}">
+            ${t.kind === "Entrata" ? "+" : "−"}${money.format(t.amount)}
+          </strong>
+          <div class="actions">
+            <button class="secondary small" data-edit="${t.id}">Modifica</button>
+            <button class="secondary small" data-delete="${t.id}">Elimina</button>
+          </div>
+        </li>`).join("")
+    : '<p class="empty">Nessuna transazione. Aggiungine una con il modulo qui sopra.</p>';
+}
+
+function resetForm() {
+  editingId = null;
+  $("txForm").reset();
+  $("kindInput").value = "Uscita";
+  fillCategories("Uscita");
+  $("dateInput").value = todayISO();
+  $("formTitle").textContent = "Nuova transazione";
+  $("submitBtn").textContent = "Aggiungi transazione";
+  $("cancelEditBtn").hidden = true;
+  setScanStatus("");
+}
+
+$("kindInput").addEventListener("change", (e) => fillCategories(e.target.value));
+
+$("monthInput").addEventListener("change", (e) => {
+  if (e.target.value) {
+    currentMonth = e.target.value;
+    render();
+  }
+});
+
+$("txForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const kind = $("kindInput").value;
+  const category = $("categoryInput").value;
+  const description = $("descriptionInput").value.trim();
+  const amount = parseAmount($("amountInput").value);
+  const date = $("dateInput").value;
+
+  if (!description || !categories[kind].includes(category)) {
+    showToast("Controlla tipo, descrizione e categoria.");
+    return;
+  }
+  if (amount === null || !isValidDate(date)) {
+    showToast("Inserisci un importo positivo e una data valida.");
+    return;
+  }
+
+  const record = { kind, description, category, amount, transaction_date: date };
+  if (editingId) {
+    transactions = transactions.map((t) => (t.id === editingId ? { ...t, ...record } : t));
+    showToast("Transazione aggiornata.");
+  } else {
+    transactions.push({ id: newId(), ...record });
+    showToast("Transazione aggiunta.");
+  }
+  saveTransactions();
+  currentMonth = date.slice(0, 7);
+  resetForm();
+  render();
+});
+
+$("cancelEditBtn").addEventListener("click", resetForm);
+
+$("txList").addEventListener("click", (e) => {
+  const editId = e.target.dataset.edit;
+  const deleteId = e.target.dataset.delete;
+  if (editId) {
+    const t = transactions.find((x) => x.id === editId);
+    if (!t) return;
+    editingId = t.id;
+    $("kindInput").value = t.kind;
+    fillCategories(t.kind, t.category);
+    $("descriptionInput").value = t.description;
+    $("amountInput").value = String(t.amount).replace(".", ",");
+    $("dateInput").value = t.transaction_date;
+    $("formTitle").textContent = "Modifica transazione";
+    $("submitBtn").textContent = "Salva modifiche";
+    $("cancelEditBtn").hidden = false;
+    $("txForm").scrollIntoView({ behavior: "smooth", block: "center" });
+  } else if (deleteId) {
+    if (!confirm("Eliminare questa transazione?")) return;
+    transactions = transactions.filter((t) => t.id !== deleteId);
+    saveTransactions();
+    if (editingId === deleteId) resetForm();
+    render();
+    showToast("Transazione eliminata.");
+  }
+});
+
+$("budgetForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const value = Number($("budgetInput").value.trim().replace(",", "."));
+  if (!Number.isFinite(value) || value < 0) {
+    showToast("Inserisci un budget valido.");
+    return;
+  }
+  budget = value;
+  writeStorage(KEY_BUDGET, budget);
+  $("budgetInput").blur();
+  render();
+  showToast("Budget mensile aggiornato.");
+});
+
+// ---- Budgets, tabs, annual overview, categories ----
+function toBudgetOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function parseBudgetInput(raw) {
+  return toBudgetOrNull(String(raw).trim().replace(",", "."));
+}
+
+function budgetFor(month) {
+  return Object.prototype.hasOwnProperty.call(monthBudgets, month)
+    ? Number(monthBudgets[month]) : budget;
+}
+
+function monthKey(year, monthNumber) {
+  return `${year}-${String(monthNumber).padStart(2, "0")}`;
+}
+
+function annualBudgetFor(year) {
+  if (annualBudget !== null) return annualBudget;
+  let total = 0;
+  for (let m = 1; m <= 12; m++) total += budgetFor(monthKey(year, m));
+  return total;
+}
+
+function saveCategories() {
+  writeStorage(KEY_CATEGORIES, categories);
+}
+
+function ensureCategory(t) {
+  const list = categories[t.kind];
+  if (!list.includes(t.category)) list.splice(list.indexOf("Altro"), 0, t.category);
+}
+
+function restoreSettings(data) {
+  const base = toBudgetOrNull(data.budget);
+  if (base !== null) { budget = base; writeStorage(KEY_BUDGET, budget); }
+  const cleaned = {};
+  if (data.monthBudgets && typeof data.monthBudgets === "object") {
+    Object.entries(data.monthBudgets).forEach(([key, value]) => {
+      if (/^\d{4}-\d{2}$/.test(key) && toBudgetOrNull(value) !== null) cleaned[key] = Number(value);
+    });
+  }
+  monthBudgets = cleaned;
+  writeStorage(KEY_MONTH_BUDGETS, monthBudgets);
+  annualBudget = toBudgetOrNull(data.annualBudget);
+  writeStorage(KEY_ANNUAL_BUDGET, annualBudget);
+  if (data.categories) categories = sanitizeCategories(data.categories);
+}
+
+// Tabs
+function showTab(name) {
+  ["month", "year", "plans", "settings"].forEach((id) => {
+    $(id + "View").hidden = id !== name;
+    document.querySelector(`[data-tab="${id}"]`).setAttribute("aria-selected", String(id === name));
+  });
+  window.scrollTo(0, 0);
+}
+document.querySelector(".tabs").addEventListener("click", (e) => {
+  const tab = e.target.closest("[data-tab]");
+  if (tab) showTab(tab.dataset.tab);
+});
+
+// Monthly budget: default for every month, or an override for the open month only
+$("budgetMonthBtn").addEventListener("click", () => {
+  const value = parseBudgetInput($("budgetInput").value);
+  if (value === null) { showToast("Inserisci un budget valido."); return; }
+  monthBudgets[currentMonth] = value;
+  writeStorage(KEY_MONTH_BUDGETS, monthBudgets);
+  render();
+  showToast("Budget impostato solo per questo mese.");
+});
+
+$("budgetResetBtn").addEventListener("click", () => {
+  delete monthBudgets[currentMonth];
+  writeStorage(KEY_MONTH_BUDGETS, monthBudgets);
+  render();
+  showToast("Questo mese usa di nuovo il budget standard.");
+});
+
+// Annual budget
+$("annualBudgetForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const value = parseBudgetInput($("annualBudgetInput").value);
+  if (value === null) { showToast("Inserisci un budget annuale valido."); return; }
+  annualBudget = value;
+  writeStorage(KEY_ANNUAL_BUDGET, annualBudget);
+  $("annualBudgetInput").blur();
+  render();
+  showToast("Budget annuale aggiornato.");
+});
+
+$("annualResetBtn").addEventListener("click", () => {
+  annualBudget = null;
+  writeStorage(KEY_ANNUAL_BUDGET, null);
+  render();
+  showToast("Budget annuale = somma dei budget mensili.");
+});
+
+// Annual overview
+$("yearPrev").addEventListener("click", () => { currentYear--; renderYear(); });
+$("yearNext").addEventListener("click", () => { currentYear++; renderYear(); });
+$("yMonths").addEventListener("click", (e) => {
+  const row = e.target.closest("[data-month]");
+  if (!row) return;
+  currentMonth = row.dataset.month;
+  showTab("month");
+  render();
+});
+
+function renderYear() {
+  const income = new Array(12).fill(0);
+  const expenses = new Array(12).fill(0);
+  const categoryTotals = {};
+  transactions.forEach((t) => {
+    if (Number(t.transaction_date.slice(0, 4)) !== currentYear) return;
+    const i = Number(t.transaction_date.slice(5, 7)) - 1;
+    if (t.kind === "Entrata") {
+      income[i] += t.amount;
+    } else {
+      expenses[i] += t.amount;
+      categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+    }
+  });
+  const sum = (list) => list.reduce((a, b) => a + b, 0);
+  const totalIncome = sum(income);
+  const totalExpenses = sum(expenses);
+  const balance = totalIncome - totalExpenses;
+
+  $("yearTitle").textContent = String(currentYear);
+  $("yIncome").textContent = money.format(totalIncome);
+  $("yExpenses").textContent = money.format(totalExpenses);
+  $("yBalance").textContent = money.format(balance);
+  $("yBalance").className = balance >= 0 ? "income" : "expense";
+
+  const activeMonths = income.filter((v, i) => v > 0 || expenses[i] > 0).length;
+  $("yAverage").textContent = activeMonths
+    ? `Spesa media mensile: ${money.format(totalExpenses / activeMonths)} (su ${activeMonths} ${activeMonths === 1 ? "mese" : "mesi"} con movimenti)`
+    : "Nessun movimento in quest'anno.";
+
+  const yearBudget = annualBudgetFor(currentYear);
+  const remaining = yearBudget - totalExpenses;
+  $("yBudgetText").textContent = `Budget: ${money.format(yearBudget)}`;
+  $("yRemainingText").textContent = remaining >= 0
+    ? `Restano ${money.format(remaining)}` : `Sforato di ${money.format(-remaining)}`;
+  $("yRemainingText").className = remaining >= 0 ? "income" : "expense";
+  const percent = yearBudget > 0 ? Math.min(100, (totalExpenses / yearBudget) * 100) : (totalExpenses > 0 ? 100 : 0);
+  $("yBudgetBar").className = "bar" + (remaining < 0 ? " over" : "");
+  $("yBudgetBar").firstElementChild.style.width = percent + "%";
+  $("yBudgetHint").textContent = annualBudget === null
+    ? "Calcolato come somma dei budget dei 12 mesi."
+    : "Impostato a mano (vale per ogni anno).";
+  $("annualResetBtn").hidden = annualBudget === null;
+  if (document.activeElement !== $("annualBudgetInput")) {
+    $("annualBudgetInput").value = String(yearBudget).replace(".", ",");
+  }
+
+  const scale = Math.max(1, ...income, ...expenses);
+  $("yMonths").innerHTML = income.map((inc, i) => {
+    const key = monthKey(currentYear, i + 1);
+    const label = new Date(currentYear, i, 1).toLocaleDateString("it-IT", { month: "long" });
+    const over = expenses[i] > budgetFor(key);
+    return `
+      <button type="button" class="monthRow" data-month="${key}">
+        <div class="head"><strong>${label}</strong>
+          <span class="${inc - expenses[i] >= 0 ? "income" : "expense"}">${money.format(inc - expenses[i])}</span></div>
+        <div class="bar"><span style="width:${(inc / scale) * 100}%;background:var(--income)"></span></div>
+        <div class="bar"><span style="width:${(expenses[i] / scale) * 100}%;background:var(--expense)"></span></div>
+        <div class="vals"><span>+${money.format(inc)} / −${money.format(expenses[i])}</span>
+          ${over ? '<span class="expense">oltre budget</span>' : ""}</div>
+      </button>`;
+  }).join("");
+
+  const rows = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+  $("yCategories").innerHTML = rows.length
+    ? rows.map(([name, total]) => `
+        <div class="cat">
+          <div><span>${escapeHtml(name)}</span><strong>${money.format(total)}</strong></div>
+          <div class="bar"><span style="width:${(total / totalExpenses) * 100}%"></span></div>
+        </div>`).join("")
+    : '<p class="empty">Nessuna uscita in quest\'anno.</p>';
+}
+
+// Category manager
+function afterCategoriesChanged() {
+  saveCategories();
+  saveTransactions();
+  savePlans();
+  fillCategories($("kindInput").value, $("categoryInput").value);
+  render();
+}
+
+function categoryNameError(kind, name, ignoreName) {
+  if (!name) return "Scrivi il nome della categoria.";
+  if (name.length > 30) return "Il nome è troppo lungo (massimo 30 caratteri).";
+  const exists = categories[kind].some(
+    (n) => n !== ignoreName && n.toLowerCase() === name.toLowerCase());
+  return exists ? "Esiste già una categoria con questo nome." : "";
+}
+
+["Uscita", "Entrata"].forEach((kind) => {
+  $("catForm" + kind).addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = $("catInput" + kind).value.trim();
+    const error = categoryNameError(kind, name, null);
+    if (error) { showToast(error); return; }
+    categories[kind].splice(categories[kind].indexOf("Altro"), 0, name);
+    $("catInput" + kind).value = "";
+    afterCategoriesChanged();
+    showToast("Categoria aggiunta.");
+  });
+});
+
+$("settingsView").addEventListener("click", (e) => {
+  const kind = e.target.dataset.kind;
+  const renameName = e.target.dataset.rename;
+  const removeName = e.target.dataset.remove;
+  if (renameName) {
+    const input = prompt(`Nuovo nome per "${renameName}":`, renameName);
+    if (input === null) return;
+    const name = input.trim();
+    const error = categoryNameError(kind, name, renameName);
+    if (error) { showToast(error); return; }
+    categories[kind] = categories[kind].map((n) => (n === renameName ? name : n));
+    transactions.forEach((t) => {
+      if (t.kind === kind && t.category === renameName) t.category = name;
+    });
+    if (kind === "Uscita") plans.forEach((p) => { if (p.category === renameName) p.category = name; });
+    afterCategoriesChanged();
+    showToast("Categoria rinominata.");
+  } else if (removeName) {
+    if (!confirm(`Eliminare "${removeName}"? Le sue transazioni passeranno ad "Altro".`)) return;
+    categories[kind] = categories[kind].filter((n) => n !== removeName);
+    transactions.forEach((t) => {
+      if (t.kind === kind && t.category === removeName) t.category = "Altro";
+    });
+    if (kind === "Uscita") plans.forEach((p) => { if (p.category === removeName) p.category = "Altro"; });
+    afterCategoriesChanged();
+    showToast("Categoria eliminata.");
+  }
+});
+
+function renderSettings() {
+  ["Uscita", "Entrata"].forEach((kind) => {
+    $("catList" + kind).innerHTML = categories[kind].map((name) => `
+      <li class="catItem">
+        <span>${escapeHtml(name)}</span>
+        ${name === "Altro"
+          ? '<span class="meta">fissa</span>'
+          : `<span class="catActions">
+               <button type="button" class="secondary small" data-kind="${kind}" data-rename="${escapeHtml(name)}">Rinomina</button>
+               <button type="button" class="secondary small" data-kind="${kind}" data-remove="${escapeHtml(name)}">Elimina</button>
+             </span>`}
+      </li>`).join("");
+  });
+}
+
+function render() {
+  renderMonth();
+  renderYear();
+  renderPlans();
+  renderSettings();
+}
+
+// ---- Installment plans and subscriptions ----
+const UNIT_LABELS = {
+  weeks: ["settimana", "settimane"],
+  months: ["mese", "mesi"],
+  years: ["anno", "anni"],
+};
+
+function sanitizePlans(raw) {
+  const PLAN_UNITS = ["weeks", "months", "years"];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((p) =>
+    p && typeof p.id === "string" && p.description &&
+    (p.type === "installments" || p.type === "subscription") &&
+    Number(p.amount) > 0 && Number(p.interval) >= 1 && PLAN_UNITS.includes(p.unit) &&
+    isValidDate(String(p.start_date))
+  ).map((p) => ({
+    id: p.id,
+    type: p.type,
+    description: String(p.description).trim(),
+    category: String(p.category || "Altro"),
+    amount: Number(p.amount),
+    interval: Math.round(Number(p.interval)),
+    unit: p.unit,
+    start_date: String(p.start_date),
+    count: p.type === "installments" ? Math.round(Number(p.count)) || 1 : null,
+    generated: Math.max(0, Math.round(Number(p.generated)) || 0),
+    tan: Number(p.tan) > 0 ? Number(p.tan) : 0,
+  }));
+}
+
+function savePlans() {
+  writeStorage(KEY_PLANS, plans);
+}
+
+function importPlans(data, replace) {
+  const incoming = sanitizePlans(Array.isArray(data) ? [] : data.plans);
+  plans = replace ? incoming : plans.concat(incoming.filter((p) => !plans.some((x) => x.id === p.id)));
+  incoming.forEach((p) => { if (!categories.Uscita.includes(p.category)) ensureCategory({ kind: "Uscita", category: p.category }); });
+  savePlans();
+}
+
+function planLabel(t) {
+  if (!t.plan_id) return "";
+  return t.plan_total ? ` (rata ${t.plan_index}/${t.plan_total})` : " (abbonamento)";
+}
+
+function frequencyLabel(interval, unit) {
+  const [one, many] = UNIT_LABELS[unit];
+  return interval === 1 ? one : `${interval} ${many}`;
+}
+
+// Subscriptions create their charges as they fall due (up to the end of the current month).
+function materializePlans() {
+  let changed = false;
+  plans.filter((p) => p.type === "subscription").forEach((plan) => {
+    const dates = subscriptionDates(plan, todayISO());
+    dates.forEach((date, i) => {
+      transactions.push({
+        id: newId(), kind: "Uscita", description: plan.description, category: plan.category,
+        amount: plan.amount, transaction_date: date, plan_id: plan.id, plan_index: plan.generated + i + 1,
+      });
+    });
+    if (dates.length) { plan.generated += dates.length; changed = true; }
+  });
+  if (changed) { saveTransactions(); savePlans(); }
+}
+
+function readPlanForm() {
+  const intOrNull = (id) => {
+    const n = Number($(id).value);
+    return Number.isInteger(n) && n >= 1 ? n : null;
+  };
+  const tanRaw = $("planTan").value.trim().replace(",", ".");
+  return {
+    type: $("planType").value,
+    description: $("planDescription").value.trim(),
+    category: $("planCategory").value,
+    mode: $("planAmountMode").value,
+    amount: parseAmount($("planAmount").value),
+    count: intOrNull("planCount"),
+    interval: intOrNull("planInterval"),
+    unit: $("planUnit").value,
+    tan: tanRaw === "" ? 0 : Number(tanRaw),
+    start: $("planStart").value,
+  };
+}
+
+function fillPlanCategories() {
+  const select = $("planCategory");
+  const current = select.value;
+  select.innerHTML = categories.Uscita
+    .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+  if (categories.Uscita.includes(current)) select.value = current;
+}
+
+function updatePlanFormUI() {
+  const isInstallments = $("planType").value === "installments";
+  const mode = $("planAmountMode").value;
+  $("planModeWrap").hidden = !isInstallments;
+  $("planCountWrap").hidden = !isInstallments;
+  $("planTanWrap").hidden = !(isInstallments && mode === "total");
+  $("planAmountLabel").textContent = !isInstallments ? "Importo dell'addebito (€)"
+    : mode === "total" ? "Totale da rateizzare (€)" : "Importo di ogni rata (€)";
+  $("planStartLabel").textContent = isInstallments ? "Data della prima rata" : "Data del primo addebito";
+  updatePlanPreview();
+}
+
+function computeInstallments(f) {
+  return installmentAmounts({
+    amount: f.amount, mode: f.mode, count: f.count,
+    annualPercent: f.tan, interval: f.interval, unit: f.unit,
+  });
+}
+
+function updatePlanPreview() {
+  const f = readPlanForm();
+  const box = $("planPreview");
+  const ready = f.amount !== null && f.interval !== null && isValidDate(f.start) && Number.isFinite(f.tan) && f.tan >= 0;
+  if (!ready || (f.type === "installments" && f.count === null)) { box.hidden = true; return; }
+
+  if (f.type === "subscription") {
+    box.textContent = `${money.format(f.amount)} ogni ${frequencyLabel(f.interval, f.unit)}, dal ${f.start}.`;
+  } else {
+    const calc = computeInstallments(f);
+    const last = addUnits(f.start, (f.count - 1) * f.interval, f.unit);
+    const lastNote = calc.amounts[f.count - 1] !== calc.amounts[0]
+      ? ` (l'ultima ${money.format(calc.amounts[f.count - 1])})` : "";
+    box.textContent = `${f.count} rate da ${money.format(calc.amounts[0])}${lastNote}, una ogni ${frequencyLabel(f.interval, f.unit)}. ` +
+      `Totale pagato: ${money.format(calc.total)}` +
+      (calc.interest > 0 ? `, di cui interessi ${money.format(calc.interest)}` : "") +
+      `. Ultima rata il ${last}.`;
+  }
+  box.hidden = false;
+}
+
+$("planForm").addEventListener("input", updatePlanPreview);
+$("planForm").addEventListener("change", updatePlanFormUI);
+$("planType").addEventListener("change", () => {
+  if ($("planType").value === "subscription" && categories.Uscita.includes("Abbonamenti")) {
+    $("planCategory").value = "Abbonamenti";
+  }
+});
+
+$("planForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const f = readPlanForm();
+  if (!f.description || !categories.Uscita.includes(f.category)) {
+    showToast("Controlla descrizione e categoria.");
+    return;
+  }
+  if (f.amount === null || f.interval === null || !isValidDate(f.start)) {
+    showToast("Controlla importo, frequenza e data.");
+    return;
+  }
+  if (f.type === "installments" && (f.count === null || f.count > 360)) {
+    showToast("Inserisci un numero di rate valido (da 1 a 360).");
+    return;
+  }
+  if (!Number.isFinite(f.tan) || f.tan < 0 || f.tan > 100) {
+    showToast("Inserisci un tasso d'interesse valido (da 0 a 100).");
+    return;
+  }
+
+  const plan = {
+    id: newId(), type: f.type, description: f.description, category: f.category,
+    amount: f.amount, interval: f.interval, unit: f.unit, start_date: f.start,
+    count: null, generated: 0, tan: 0,
+  };
+  if (f.type === "installments") {
+    const calc = computeInstallments(f);
+    plan.count = f.count;
+    plan.amount = calc.amounts[0];
+    plan.tan = f.mode === "total" ? f.tan : 0;
+    plan.generated = f.count;
+    calc.amounts.forEach((amount, k) => {
+      transactions.push({
+        id: newId(), kind: "Uscita", description: plan.description, category: plan.category,
+        amount, transaction_date: occurrenceDate(plan, k),
+        plan_id: plan.id, plan_index: k + 1, plan_total: plan.count,
+      });
+    });
+    saveTransactions();
+  }
+  plans.push(plan);
+  savePlans();
+  materializePlans();
+
+  $("planForm").reset();
+  $("planStart").value = todayISO();
+  fillPlanCategories();
+  updatePlanFormUI();
+  render();
+  showToast(f.type === "installments" ? "Piano a rate creato." : "Abbonamento creato.");
+});
+
+function renderPlans() {
+  fillPlanCategories();
+  const today = todayISO();
+  $("planList").innerHTML = plans.length ? plans.map((plan) => {
+    const own = transactions.filter((t) => t.plan_id === plan.id);
+    const future = own.filter((t) => t.transaction_date > today);
+    let detail;
+    if (plan.type === "installments") {
+      const paid = own.filter((t) => t.transaction_date <= today).length;
+      const remaining = future.reduce((sum, t) => sum + t.amount, 0);
+      detail = `${plan.count} rate, una ogni ${frequencyLabel(plan.interval, plan.unit)}` +
+        (plan.tan > 0 ? ` · TAN ${String(plan.tan).replace(".", ",")}%` : "") +
+        `<br>Pagate ${paid}/${plan.count} · ${remaining > 0 ? `restano ${money.format(remaining)}` : "completato"}`;
+    } else {
+      detail = `Ogni ${frequencyLabel(plan.interval, plan.unit)}<br>Prossimo addebito: ${occurrenceDate(plan, plan.generated)}`;
+    }
+    return `
+      <li class="tx">
+        <div>
+          <div>${escapeHtml(plan.description)}</div>
+          <div class="meta">${escapeHtml(plan.category)} · ${detail}</div>
+        </div>
+        <strong class="expense">${money.format(plan.amount)}</strong>
+        <div class="actions">
+          <button class="secondary small" data-plan-delete="${escapeHtml(plan.id)}">Elimina piano</button>
+        </div>
+      </li>`;
+  }).join("") : '<p class="empty">Nessun piano attivo.</p>';
+}
+
+$("planList").addEventListener("click", (e) => {
+  const id = e.target.dataset.planDelete;
+  if (!id) return;
+  if (!confirm("Eliminare il piano? I pagamenti già scaduti restano nello storico, quelli futuri vengono rimossi.")) return;
+  const today = todayISO();
+  transactions = transactions.filter((t) => !(t.plan_id === id && t.transaction_date > today));
+  plans = plans.filter((p) => p.id !== id);
+  saveTransactions();
+  savePlans();
+  render();
+  showToast("Piano eliminato.");
+});
+
+// ---- Backup: export / import JSON ----
+$("exportBtn").addEventListener("click", () => {
+  const payload = JSON.stringify({ budget, monthBudgets, annualBudget, categories, plans, transactions }, null, 2);
+  const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `expense-tracker-backup-${todayISO()}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+});
+
+$("importBtn").addEventListener("click", () => $("importFile").click());
+
+$("importFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    const list = Array.isArray(data) ? data : data.transactions;
+    if (!Array.isArray(list)) throw new Error("bad format");
+
+    const valid = list.map((t) => ({
+      id: newId(),
+      kind: t.kind,
+      description: String(t.description || "").trim(),
+      category: t.category,
+      amount: Number(t.amount),
+      transaction_date: String(t.transaction_date || ""),
+      ...(t.plan_id ? {
+        plan_id: String(t.plan_id),
+        plan_index: Number(t.plan_index) || null,
+        plan_total: Number(t.plan_total) || null,
+      } : {}),
+    })).filter((t) =>
+      (t.kind === "Entrata" || t.kind === "Uscita") && t.description && t.category &&
+      t.amount > 0 && isValidDate(t.transaction_date));
+
+    const replace = confirm(
+      `Trovate ${valid.length} transazioni valide.\n\nOK = sostituisci i dati attuali\nAnnulla = aggiungi a quelli esistenti`);
+    transactions = replace ? valid : transactions.concat(valid);
+    if (replace && !Array.isArray(data)) restoreSettings(data);
+    importPlans(data, replace);
+    valid.forEach(ensureCategory);
+    saveCategories();
+    saveTransactions();
+    render();
+    showToast("Backup importato.");
+  } catch (err) {
+    showToast("File non valido: scegli un backup in formato JSON.");
+  }
+});
+
+// ---- Receipt scan: OCR runs on the phone (Tesseract.js), nothing is uploaded ----
+const TESSERACT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+let tesseractPromise = null;
+
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (!tesseractPromise) {
+    tesseractPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = TESSERACT_URL;
+      script.onload = () => resolve(window.Tesseract);
+      script.onerror = () => { tesseractPromise = null; reject(new Error("load failed")); };
+      document.head.appendChild(script);
+    });
+  }
+  return tesseractPromise;
+}
+
+function setScanStatus(message) {
+  $("scanStatus").hidden = !message;
+  $("scanStatus").textContent = message || "";
+}
+
+// Downscale, convert to grayscale and stretch contrast to help the OCR.
+async function prepareImage(file) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch (err) {
+    bitmap = await createImageBitmap(file);
+  }
+  const scale = Math.min(1, 1800 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = image.data;
+  const histogram = new Array(256).fill(0);
+  for (let i = 0; i < px.length; i += 4) {
+    const gray = Math.round(0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]);
+    px[i] = px[i + 1] = px[i + 2] = gray;
+    histogram[gray]++;
+  }
+  const total = px.length / 4;
+  let low = 0, high = 255, acc = 0;
+  for (let v = 0; v < 256; v++) { acc += histogram[v]; if (acc >= total * 0.02) { low = v; break; } }
+  acc = 0;
+  for (let v = 255; v >= 0; v--) { acc += histogram[v]; if (acc >= total * 0.02) { high = v; break; } }
+  const range = Math.max(1, high - low);
+  for (let i = 0; i < px.length; i += 4) {
+    const stretched = Math.max(0, Math.min(255, ((px[i] - low) * 255) / range));
+    px[i] = px[i + 1] = px[i + 2] = stretched;
+  }
+  ctx.putImageData(image, 0, 0);
+  return canvas;
+}
+
+async function scanReceipt(file) {
+  if (!file) return;
+  $("scanBtn").disabled = $("galleryBtn").disabled = true;
+  $("scanDetails").hidden = true;
+  try {
+    setScanStatus("Preparo la foto...");
+    const canvas = await prepareImage(file);
+    setScanStatus("Carico il lettore di testo (la prima volta serve internet)...");
+    const Tesseract = await loadTesseract();
+    const worker = await Tesseract.createWorker("eng", 1, {
+      logger: (m) => {
+        if (m.status === "recognizing text") {
+          setScanStatus(`Leggo lo scontrino... ${Math.round(m.progress * 100)}%`);
+        }
+      },
+    });
+    let text = "";
+    try {
+      await worker.setParameters({ tessedit_pageseg_mode: "6" });
+      text = (await worker.recognize(canvas)).data.text;
+    } finally {
+      await worker.terminate();
+    }
+
+    const result = parseReceipt(text, todayISO());
+    resetForm();
+    $("kindInput").value = "Uscita";
+    fillCategories("Uscita", categories.Uscita.includes(result.category) ? result.category : "Altro");
+    $("descriptionInput").value = result.storeName;
+    $("amountInput").value = result.total ? String(result.total).replace(".", ",") : "";
+    $("dateInput").value = result.date || todayISO();
+    $("scanText").textContent = text;
+    $("scanDetails").hidden = false;
+
+    const missing = [];
+    if (!result.total) missing.push("il totale");
+    if (!result.category) missing.push("la categoria");
+    if (!result.date) missing.push("la data");
+    setScanStatus(missing.length
+      ? `Non sono riuscito a leggere ${missing.join(", ")}: completa a mano e controlla i campi.`
+      : "Controlla importo, categoria e data, poi premi Aggiungi.");
+  } catch (err) {
+    setScanStatus("Scansione non riuscita. Controlla la connessione e riprova con una foto più nitida.");
+  } finally {
+    $("scanBtn").disabled = $("galleryBtn").disabled = false;
+  }
+}
+
+$("scanBtn").addEventListener("click", () => $("scanCamera").click());
+$("galleryBtn").addEventListener("click", () => $("scanGallery").click());
+[$("scanCamera"), $("scanGallery")].forEach((input) => {
+  input.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    scanReceipt(file);
+  });
+});
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
+fillCategories("Uscita");
+$("dateInput").value = todayISO();
+$("planStart").value = todayISO();
+materializePlans();
+updatePlanFormUI();
+render();
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) { materializePlans(); render(); }
+});
+</script>
+</body>
+</html>
